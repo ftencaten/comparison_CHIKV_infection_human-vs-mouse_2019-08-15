@@ -3,68 +3,102 @@ title: "R Notebook"
 output: html_notebook
 ---
 
-
-
 ```{r}
 #Adults
-gcadults = read.delim('~/Dropbox/Projetos/comparison_CHIKV_infection_human-vs-mouse_2019-08-15/diff_expression_adult_cohort/fccounts.matrix.infected')
+gene.counts.adults = read.delim(here("data",'raw','adults','fccounts.matrix.infected'))
 
-smpladults = read.delim('~/Dropbox/Projetos/comparison_CHIKV_infection_human-vs-mouse_2019-08-15/diff_expression_adult_cohort/samplesinfo_selection.tsv')
+sample.file.adults = read.delim(here('data', 'raw','adults','samplesinfo_selection.tsv'))
 
-smpladults = smpladults[,-3]
+sample.file.adults = sample.file.adults[,-3]
 
 #Children
-rd <- read.delim('~/Dropbox/Projetos/comparison_CHIKV_infection_human-vs-mouse_2019-08-15/diff_expression_pediatric_cohort/genecount_matrix_featureCounts.txt') # Read counts file from featureCounts
-smpl = read.delim('~/Dropbox/Projetos/comparison_CHIKV_infection_human-vs-mouse_2019-08-15/diff_expression_pediatric_cohort/sample_description_PRJNA390289_tsv_v3.txt') # File with sample information (groups, lib.size)
+gene.counts.children <- read.delim(here('data','raw','children','genecount_matrix_featureCounts.txt')) 
 
-#samples to remove according MDP
-smplrm = read.delim('~/Dropbox/Projetos/comparison_CHIKV_infection_human-vs-mouse_2019-08-15/diff_expression_pediatric_cohort/samples_to_remove_based_on_MDP')
-
-rd = rd[,(colnames(rd) %in% as.vector(smplrm$Sample)) == FALSE]
-smpl = smpl[(smpl$run_accession %in% as.vector(smplrm$Sample) == FALSE), ]
-
-#reorder columns from gene count matrix
-rd = rd[,order(colnames(rd))]
-
-# Patient samples to remove according MDS plot
-rem = c(28,39,43)
-remsrr = smpl[smpl$patient %in% rem,1]
-
-rd = rd[,which((colnames(rd) %in% remsrr) == FALSE)]
-smpl = smpl[-which(smpl$patient %in% rem),]
-
-rd$Gene.stable.ID = row.names(rd)
-
-smpl = smpl[,c(1,4)]
-colnames(smpl) = c('Sample','Class')
+sample.file.children = read.delim(here('data','raw','children','sample_description_PRJNA390289_tsv_v3.txt'))
 
 #Mice
-rdmice <- read.delim('~/Dropbox/Projetos/comparison_CHIKV_infection_human-vs-mouse_2019-08-15/diff_expression_mouse/genecount_matrix_featureCounts.txt')
-ortho = read.delim('~/Dropbox/Projetos/comparison_CHIKV_infection_human-vs-mouse_2019-08-15/diff_expression_mouse/hsapiens_genes_orthologs_mouse.txt')
-rdmice$Mouse.gene.name = rownames(rdmice)
-out = dplyr::inner_join(rdmice, ortho, by = "Mouse.gene.name")
+gene.counts.mice <- read.delim(here('data','tidy','mice','genecount_matrix_featureCounts_orthologs_removing_duplicated.txt'))
+
+sample.file.mice = read.delim(here('data','raw','mice','samplesinfo.tsv'))
+
+#
+gene.counts.adults = gene.counts.adults[,levels(sample.file.adults$Sample)]
+gene.counts.adults = gene.counts.adults[,order(colnames(gene.counts.adults))]
+
+#Samples to remove from children cohort according MDP
+samples.to.remove.children = read.delim(here('data','tidy','children','samples_to_remove_based_on_MDP'))
+
+gene.counts.children = gene.counts.children[,(colnames(gene.counts.children) %in% as.vector(samples.to.remove.children$Sample)) == FALSE]
+
+sample.file.children = sample.file.children[(sample.file.children$run_accession %in% as.vector(samples.to.remove.children$Sample) == FALSE), ]
+
+#reorder columns from gene count matrix
+gene.counts.children = gene.counts.children[,order(colnames(gene.counts.children))]
+
+# Patient samples to remove from children cohort according MDS plot
+rem = c(28,39,43)
+remsrr = sample.file.children[sample.file.children$patient %in% rem,1]
+
+gene.counts.children = gene.counts.children[,which((colnames(gene.counts.children) %in% remsrr) == FALSE)]
+sample.file.children = sample.file.children[-which(sample.file.children$patient %in% rem),]
+
+gene.counts.children$Gene.stable.ID = row.names(gene.counts.children)
+
+sample.file.children = sample.file.children[,c(1,4)]
+colnames(sample.file.children) = c('Sample','Class')
+
+# Read orthologs file
+ortho = read.delim(here('data','raw','mice','hsapiens_genes_orthologs_mouse.txt'))
+
+gene.counts.mice$Mouse.gene.name = rownames(gene.counts.mice)
+out = dplyr::inner_join(gene.counts.mice, ortho, by = "Mouse.gene.name")
 library(plyr)
 #média dos genes duplicados
 dat5<-ddply(out,.(Gene.stable.ID),colwise(mean,c(colnames(out)[1:18])))
 write.table(dat5,'~/Dropbox/Projetos/comparison_CHIKV_infection_human-vs-mouse_2019-08-15/diff_expression_mouse/genecount_matrix_featureCounts_orthologs_removing_duplicated.txt', sep='\t',quote=F,row.names=F)
 
 rdmice <- read.delim('~/Dropbox/Projetos/comparison_CHIKV_infection_human-vs-mouse_2019-08-15/diff_expression_mouse/genecount_matrix_featureCounts_orthologs_removing_duplicated.txt')
-smplmice = read.delim('~/Dropbox/Projetos/comparison_CHIKV_infection_human-vs-mouse_2019-08-15/diff_expression_mouse/samplesinfo.tsv')
 
-smplmice = smplmice[,-3]
+
+sample.file.mice = sample.file.mice[,-3]
 
 ```
 
 
 MERGE GENE COUNTS ADULTS, MICE, CHILDREN
 ```{r}
-adultmice  = dplyr::inner_join(gcadults, rdmice, by = "Gene.stable.ID")
+#Add 'Gene.stable.ID' column 
+gene.counts.adults$Gene.stable.ID <- row.names(gene.counts.adults)
+gene.counts.children$Gene.stable.ID <- row.names(gene.counts.children)
 
-adultmicechildren  = dplyr::inner_join(adultmice, rd, by = "Gene.stable.ID")
+#Merge all sample files
+sample.file.all = rbind(sample.file.adults, sample.file.children, sample.file.mice)
 
-rownames(adultmicechildren) = adultmicechildren$Gene.stable.ID
-adultmicechildren = subset(adultmicechildren, select = -Gene.stable.ID)
+gene.counts.adults.mice  = dplyr::inner_join(gene.counts.adults, gene.counts.mice, by = "Gene.stable.ID")
 
-cpmall = cpm(adultmicechildren)
+gene.counts.adults.mice.children  = dplyr::inner_join(gene.counts.adults.mice, gene.counts.children, by = "Gene.stable.ID")
+
+rownames(gene.counts.adults.mice.children) = gene.counts.adults.mice.children$Gene.stable.ID
+gene.counts.adults.mice.children = subset(gene.counts.adults.mice.children, select = -Gene.stable.ID)
+
+cpm.all = as.data.frame(cpm(gene.counts.adults.mice.children))
+
+gene.counts.adults.mice.children = gene.counts.adults.mice.children[,order(colnames(gene.counts.adults.mice.children))]
+
+
+mdp.cpm.all = mdp(cpm.all, sample.file.all, control_lab = "CTRL")
+
+gene.score = mdp.cpm.all$gene_scores[,-1]
+gene.score = t(gene.score)
+
+prcom.gene.score <- prcomp(gene.score)
+
+pca_gene.score <- data.frame( PC1 = prcom.gene.score$x[, 1], 
+                               PC2 = prcom.gene.score$x[, 2], 
+                               label = rownames(gene.score))
+
+ggplot(pca_gene.score, aes(x = PC1, y = PC2, label = label)) + 
+  geom_point() + 
+  ggrepel::geom_text_repel(cex = 2.5)
 
 ```
