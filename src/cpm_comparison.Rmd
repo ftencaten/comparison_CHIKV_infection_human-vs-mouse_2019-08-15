@@ -1,0 +1,98 @@
+---
+title: "R Notebook"
+output:
+  html_notebook: default
+  pdf_document: default
+---
+
+
+```{r}
+#Clear R environment
+rm(list = ls())
+library(edgeR)
+library(dplyr)
+```
+
+**Adult data**
+```{r}
+adultrd <- read.delim('~/Dropbox/Projetos/comparison_CHIKV_infection_human-vs-mouse_2019-08-15/diff_expression_adult_cohort/fccounts.matrix.infected')
+adultsmpl = read.delim('~/Dropbox/Projetos/comparison_CHIKV_infection_human-vs-mouse_2019-08-15/diff_expression_adult_cohort/samplesinfo_selection.tsv')
+
+#Subselecting gene count matrix accoadultrding selected samples
+adultrd = adultrd[,levels(adultsmpl$Sample)]
+adultrd = adultrd[,order(colnames(adultrd))]
+
+adultsmpl = adultsmpl[order(adultsmpl$Sample),]
+
+adulty <- DGEList(counts=adultrd,samples = adultsmpl)
+
+group = factor(adultsmpl$Class)
+design <- model.matrix(~group)
+colnames(design) = levels(adultsmpl$Class)
+
+adulty <- calcNormFactors(adulty)
+
+#Calculate CPM all gene all samples
+adultcpm = cpm(adulty)
+
+#Subset only infection samples
+adultcpm_inft = subset(adultcpm, select = adultsmpl[adultsmpl$Class == 'INF',1])
+
+# Calculate simple mean for all samples per gene
+adultcpm_inft_mean = as.data.frame(apply(adultcpm_inft, 1,mean))
+
+```
+
+**Child Data**
+```{r}
+childrd <- read.delim('~/Dropbox/Projetos/comparison_CHIKV_infection_human-vs-mouse_2019-08-15/diff_expression_pediatric_cohort/genecount_matrix_featureCounts.txt')
+childsmpl = read.delim('~/Dropbox/Projetos/comparison_CHIKV_infection_human-vs-mouse_2019-08-15/diff_expression_pediatric_cohort/sample_description_PRJNA390289_tsv_v2.txt')
+
+#Subselecting gene count matrix accochildrding selected samples
+childrd = childrd[,order(colnames(childrd))]
+
+# Patient samples to remove according MDS plot
+rem = c(28,39,43)
+remsrr = childsmpl[childsmpl$patient %in% rem,1]
+
+childrd = childrd[,which((colnames(childrd) %in% remsrr) == FALSE)]
+childsmpl = childsmpl[-which(childsmpl$patient %in% rem),]
+
+
+#group = factor(paste(smpl$patient,smpl$condition,sep='.'))
+#smpl$group = group
+#design <- model.matrix(~0+group)
+group = factor(childsmpl$condition)
+childsmpl$group = group
+design <- model.matrix(~0+group)
+colnames(design) = levels(childsmpl$condition)
+
+childy <- DGEList(counts=childrd, lib.size = childsmpl$read_count ,samples = childsmpl)
+childy <- calcNormFactors(childy)
+
+#Calculate CPM all gene all samples
+childcpm = cpm(childy)
+
+#Subset only infection samples
+childcpm_inft = subset(childcpm, select = as.vector(childsmpl[childsmpl$condition == 'acute',1]))
+
+# Calculate simple mean for all samples per gene
+childcpm_inft_mean = as.data.frame(apply(childcpm_inft, 1,mean))
+
+```
+
+
+**Combine data**
+```{r}
+adultcpm_inft_mean$genes = rownames(adultcpm_inft_mean)
+childcpm_inft_mean$genes = rownames(childcpm_inft_mean)
+out = full_join(adultcpm_inft_mean, childcpm_inft_mean, by = 'genes')
+rownames(out) = out$genes
+out = out[,-2]
+colnames(out) = c('Adult.CPM','Child.CPM')
+
+```
+
+After plot the CPM value for all genes in datasets from Adult and Child samples is possible to see a tendency, but is difficulty to definy wich genes have a dissimilar pattern of expression between samples.
+
+

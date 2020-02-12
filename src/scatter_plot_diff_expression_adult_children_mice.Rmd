@@ -1,0 +1,167 @@
+---
+title: "R Notebook"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+**Correlation (log2FC) - Density plot - 12166 genes**
+
+```{r}
+library(ggplot2)
+
+data = read.delim('~/DEGs_Infected_vs_Control_Combined.csv')
+
+data = data[,4:7]
+class = c('Adults', 'Children', 'Mice - LN', 'Mice - Feet')
+colnames(data) = class
+method = c('pearson', 'spearman')
+
+for (i in class){
+  for (j in class){
+    for (k in method) {
+      x = as.vector(data[,i])
+      y = as.vector(data[,j])
+      
+      ## Pearson correlation test
+      Rp <- cor.test(x, y, method = k)
+      if (Rp$p.value == 0) {Pp <- Rp$p.value}
+      else { Pp <- formatC(Rp$p.value, format = "e", digits = 2)}
+      Pe <- round(Rp$estimate, 5)
+      
+      text_x <- max(x)-1
+      text_y <- max(y)-1
+      text = paste("R = ",Pe,"\nP-value = ",Pp)
+      
+      d = densCols(x, y, colramp = colorRampPalette(rev(rainbow(10, end = 4/6))))
+      
+      plot <- ggplot(data=data, aes(x= x, y = y, col =d)) + 
+	    ggtitle(paste(k, "correlation")) + 
+	    ylab(paste('Relative expression', j)) + 
+	    xlab(paste('Relative expression', i)) + 
+	    stat_smooth(method = "lm", size=1, color="black",linetype ="dashed",alpha=0.5) + 
+	    geom_point() + 
+	    annotate("text", x = text_x, y = text_y, size=7, label = text) + 
+	    theme(axis.text=element_text(size=12), axis.title=element_text(size=20))+
+      scale_color_identity() +
+      theme_bw()
+      
+      png(file = paste0('correlation_relative_expression_',i,'.vs.',j,'_',k,'_12166_genes.png'),width=1024,height=768)
+      
+      print(plot)
+      
+      dev.off()
+    }
+  }
+  
+}
+
+```
+
+**Correlation (log2FC) - Density plot - Only DEGs - Union**
+
+```{r}
+library(ggplot2)
+
+data = read.delim('~/DEGs_Infected_vs_Control_Combined.csv')
+
+data = data[,c(4:7,16:19)]
+class = c('Adults', 'Children', 'Mice - LN', 'Mice - Feet')
+deg = colnames(data[,5:8])
+colnames(data) = c(class, deg)
+method = c('pearson', 'spearman')
+
+for (i in 1:4){
+  for (j in 1:4){
+    for (k in method) {
+      x = as.vector(data[data[,i+4] != 'NO' | data[,j+4] != 'NO',i])
+      y = as.vector(data[data[,i+4] != 'NO' | data[,j+4] != 'NO',j])
+      
+      ## Pearson correlation test
+      Rp <- cor.test(x, y, method = k)
+      if (Rp$p.value == 0) {Pp <- Rp$p.value}
+      else { Pp <- formatC(Rp$p.value, format = "e", digits = 2)}
+      Pe <- round(Rp$estimate, 5)
+      
+      text_x <- max(x)-1
+      text_y <- max(y)-1
+      text = paste("R = ",Pe,"\nP-value = ",Pp)
+      
+      d = densCols(x, y, colramp = colorRampPalette(rev(rainbow(10, end = 4/6))))
+      
+      plot <- ggplot(data=data[data[,i+4] != 'NO' | data[,j+4] != 'NO',], aes(x= x, y = y, col =d)) + 
+	    ggtitle(paste(k, "correlation")) + 
+	    ylab(paste('Relative expression', class[j])) + 
+	    xlab(paste('Relative expression', class[i])) + 
+	    stat_smooth(method = "lm", size=1, color="black",linetype ="dashed",alpha=0.5) + 
+	    geom_point() + 
+	    annotate("text", x = text_x, y = text_y, size=7, label = text) + 
+	    theme(axis.text=element_text(size=12), axis.title=element_text(size=20))+
+      scale_color_identity() +
+      theme_bw()
+      
+      png(file = paste0('correlation_relative_expression_',class[i],'.vs.',class[j],'_',k,'_DEGs_union.png'),width=1024,height=768)
+      
+      print(plot)
+      
+      dev.off()
+    }
+  }
+  
+}
+
+```
+
+**Correlation (log2FC) - Density plot - Only DEGs - Intersection**
+
+```{r}
+library(ggplot2)
+
+data = read.delim('~/DEGs_Infected_vs_Control_Combined.csv')
+
+data = data[,c(4:7,16:19)]
+class = c('Adults', 'Children', 'Mice - LN', 'Mice - Feet')
+deg = colnames(data[,5:8])
+colnames(data) = c(class, deg)
+method = c('pearson', 'spearman')
+
+for (i in 1:4){
+  for (j in 1:4){
+    for (k in method) {
+      x = as.vector(data[data[,i+4] != 'NO' & data[,j+4] != 'NO',i])
+      y = as.vector(data[data[,i+4] != 'NO' & data[,j+4] != 'NO',j])
+      
+      ## Pearson correlation test
+      Rp <- cor.test(x, y, method = k)
+      if (Rp$p.value == 0) {Pp <- Rp$p.value}
+      else { Pp <- formatC(Rp$p.value, format = "e", digits = 2)}
+      Pe <- round(Rp$estimate, 5)
+      
+      text_x <- max(x)-1
+      text_y <- max(y)-1
+      text = paste("R = ",Pe,"\nP-value = ",Pp)
+      
+      d = densCols(x, y, colramp = colorRampPalette(rev(rainbow(10, end = 4/6))))
+      
+      plot <- ggplot(data=data[data[,i+4] != 'NO' & data[,j+4] != 'NO',], aes(x= x, y = y, col =d)) + 
+	    ggtitle(paste(k, "correlation")) + 
+	    ylab(paste('Relative expression', class[j])) + 
+	    xlab(paste('Relative expression', class[i])) + 
+	    stat_smooth(method = "lm", size=1, color="black",linetype ="dashed",alpha=0.5) + 
+	    geom_point() + 
+	    annotate("text", x = text_x, y = text_y, size=7, label = text) + 
+	    theme(axis.text=element_text(size=12), axis.title=element_text(size=20))+
+      scale_color_identity() +
+      theme_bw()
+      
+      png(file = paste0('correlation_relative_expression_',class[i],'.vs.',class[j],'_',k,'_DEGs_intersection.png'),width=1024,height=768)
+      
+      print(plot)
+      
+      dev.off()
+    }
+  }
+  
+}
+
+```

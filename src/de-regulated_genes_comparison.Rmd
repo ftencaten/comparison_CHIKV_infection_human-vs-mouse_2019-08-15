@@ -1,0 +1,482 @@
+---
+title: "De-regulated genes shared between Mouse and Humans Adult and Pediatric"
+output:
+  pdf_document: default
+---
+Once the analysis of de-regulated genes during CHIKV infection in mouse and adult and pediatric humans is ready it is possibly to compare the list to see which genes are show the same patter of expression between these samples and those who has different patterns.
+
+For the comparison with mouse genes is necessary first to identify the correspondent orthologs genes.
+
+
+Venn Diagram comparing downregulated genes between Humans Pediatric and Adult
+```{r}
+#clear R enviroment
+rm(list = ls())
+
+#load necessary libraries
+library(RColorBrewer)
+library(VennDiagram)
+library(GeneOverlap)
+library(eulerr)
+library(reshape2)
+library(ggplot2)
+
+#read file with orthologs information
+orth = read.delim('diff_expression_mouse/hsapiens_genes_orthologs_mouse.txt')
+
+# Read diff express data
+pediatric = read.delim('diff_expression_pediatric_cohort/diff_express_analysis_pediatric_cohort_male_MDP.tsv')
+pediatricfemale = read.delim('diff_expression_pediatric_cohort/diff_express_analysis_pediatric_cohort_female_MDP.tsv')
+pediatricmale = read.delim('diff_expression_pediatric_cohort/diff_express_analysis_pediatric_cohort_male_MDP.tsv')
+
+adult = read.delim('diff_expression_adult_cohort/diff_express_analysis_adult_cohort.txt')
+adultfemale = read.delim('diff_expression_adult_cohort/de-regulated_genes_adult_cohort_female.tsv')
+adultmale = read.delim('diff_expression_adult_cohort/de-regulated_genes_adult_cohort_male.tsv')
+
+mousefeet  = read.delim('diff_expression_mouse/diff_express_analysis_ctrl_f2.vs.inf_f2_with_orth')
+mouseln  = read.delim('diff_expression_mouse/diff_express_analysis_ctrl_ln2.vs.inf_ln2_with_orth')
+
+#Subset diff express genes
+pediatricdown = pediatric[pediatric$logFC <= -1 & pediatric$FDR < 0.05,]
+pediatricfemaledown = pediatricfemale[pediatricfemale$logFC <= -1 & pediatricfemale$FDR < 0.05,]
+pediatricmaledown = pediatricmale[pediatricmale$logFC <= -1 & pediatricmale$FDR < 0.05,]
+
+adultdown = adult[adult$logFC <= -1 & adult$FDR < 0.05,]
+adultfemaledown = adultfemale[adultfemale$logFC <= -1 & adultfemale$FDR < 0.05,]
+adultmaledown = adultmale[adultmale$logFC <= -1 & adultmale$FDR < 0.05,]
+
+mousefeetdown = mousefeet[mousefeet$logFC <= -1 & mousefeet$FDR < 0.05,]
+mouselndown = mouseln[mouseln$logFC <= -1 & mouseln$FDR < 0.05,]
+
+pediatricup = pediatric[pediatric$logFC >= 1 & pediatric$FDR < 0.05,]
+pediatricfemaleup = pediatricfemale[pediatricfemale$logFC >= 1 & pediatricfemale$FDR < 0.05,]
+pediatricmaleup = pediatricmale[pediatricmale$logFC >= 1 & pediatricmale$FDR < 0.05,]
+
+adultup = adult[adult$logFC >= 1 & adult$FDR < 0.05,]
+adultfemaleup = adultfemale[adultfemale$logFC >= 1 & adultfemale$FDR < 0.05,]
+adultmaleup = adultmale[adultmale$logFC >= 1 & adultmale$FDR < 0.05,]
+
+mousefeetup = mousefeet[mousefeet$logFC >= 1 & mousefeet$FDR < 0.05,]
+mouselnup = mouseln[mouseln$logFC >= 1 & mouseln$FDR < 0.05,]
+
+# Data frame with numbers of diff express genes in all situation
+df = data.frame(sample = c(rep('child',4), rep('adult',4), rep('mouse', 4)), 
+                condition = c(rep(c('female','female','male','male'),2), 'feet','feet','LN','LN'), 
+                orientation = rep(c('up','down'),6), 
+                number.diff.express = c(dim(pediatricfemaleup)[1],
+                                        dim(pediatricfemaledown)[1],
+                                        dim(pediatricmaleup)[1],
+                                        dim(pediatricmaledown)[1],
+                                        dim(adultfemaleup)[1],
+                                        dim(adultfemaledown)[1],
+                                        dim(adultmaleup)[1],
+                                        dim(adultmaledown)[1],
+                                        length(unique(mousefeetup$Mouse.gene.name)),
+                                        length(unique(mousefeetdown$Mouse.gene.name)),
+                                        length(unique(mouselnup$Mouse.gene.name)),
+                                        length(unique(mouselndown$Mouse.gene.name))
+                )
+)
+``` 
+
+```{r}
+# Bar plot with number of de-regulated genes arocding each situation.                                           
+ggplot(df, aes(orientation,number.diff.express, fill=paste(sample,condition))) + 
+  geom_bar(stat = 'identity', position = position_dodge(), color="black") +
+  theme_minimal() +
+  scale_fill_manual(values=c('#a6cee3','#1f78b4', '#b2df8a','#33a02c','#fb9a99','#e31a1c')) +
+  guides(fill=guide_legend(title="Condition")) 
+                      
+#n = length(which((rownames(adultdown) %in% rownames(pediatricdown)) == T))     
+
+#Downregulated genes
+set1down = pediatricdown$Symbol
+set2down = row.names(adultdown)
+set3down = as.vector(mousefeetdown$Gene.stable.ID)
+set3down[is.na(set3down)] = '-'
+set4down = as.vector(mouselndown$Gene.stable.ID)
+set4down[is.na(set4down)] = '-'
+
+venn.diagram(x = list(set1down,set2down,set3down),
+             category.names = c('Pediatric','Adult','Mouse - Feet'),
+             main = 'Downregulated genes',
+             imagetype="png",
+             filename = 'downregulated_venn_diagram_Adult_Child_Mousefeet_MDP.png',
+             output=T,
+             lty = 2,
+             fill = brewer.pal(3, "Pastel2"))
+
+venn.diagram(x = list(set1down,set2down,set4down),
+             category.names = c('Pediatric','Adult','Mouse - LN'),
+             main = 'Downregulated genes',
+             imagetype="png",
+             filename = 'downregulated_venn_diagram_Adult_Child_MouseLN_MDP.png',
+             output=T,
+             lty = 2,
+             fill = brewer.pal(3, "Pastel2"))
+
+#Upregulated genes
+set1up = pediatricup$Symbol
+set2up = rownames(adultup)
+set3up = as.vector(mousefeetup$Gene.stable.ID)
+set3up[is.na(set3up)] = '-'
+set4up = as.vector(mouselnup$Gene.stable.ID)
+set4up[is.na(set4up)] = '-'
+
+venn.diagram(x = list(set1up,set2up,set3up),
+             category.names = c('Pediatric','Adult','Mouse - Feet'),
+             main = 'Upregulated genes',
+             imagetype="png",
+             filename = 'upregulated_venn_diagram_Adult_Child_Mousefeet_MDP.png',
+             output=T,
+             lty = 2,
+             fill = brewer.pal(3, "Pastel2"))
+
+venn.diagram(x = list(set1up,set2up,set4up),
+             category.names = c('Pediatric','Adult','Mouse - LN'),
+             main = 'Upregulated genes',
+             imagetype="png",
+             filename = 'upregulated_venn_diagram_Adult_Child_MouseLN_MDP.png',
+             output=T,
+             lty = 2,
+             fill = brewer.pal(3, "Pastel2"))
+ 
+```
+
+**Consideration after plot Venn Diagrams**
+Venn Diagrams are ready but they don't show well the proportion of diff expressed genes at each dataset and the proportion of overlap between datasets (besides that the number seems to be wrong). I prepared new Euler diagrams with the same information in order to better represent the proportions.
+
+```{r}
+#Upregulated genes Mouse Feet vs Adult vs Child
+area1 = length(set1up)
+area2 = length(set2up)
+area3 = length(unique(set3up))
+n12 = length(intersect(set1up, set2up))
+n23 = length(intersect(set2up, set3up))
+n13 = length(intersect(set1up, set3up))
+n123 = length(intersect(intersect(set1up, set2up),set3up))
+
+fit = euler(c('A' = area1-((n12+n13)-n123), 
+              'B' = area2-((n12+n23)-n123), 
+              'C' = area3-((n13+n23)-n123), 
+              'A&B' = n12 - n123, 
+              'B&C' = n23 - n123, 
+              'A&C'= n13 - n123, 
+              'A&B&C'= n123),
+#            shape='ellipse',
+            quantities=T)
+png('upregulated_euler_diagram_Adult_Child_Mousefeet_MDP.png',width=865,height = 575)
+plot(fit,
+     lty = 2,
+     fills = brewer.pal(3, "Pastel2"),
+     quantities = list(fontsize = 13),
+     labels = c('Child','Adult','Mouse - Feet - Ortholog'),
+     cex =2,
+     main = 'Upregulated Genes')
+dev.off()
+
+#Upregulated genes Mouse Linfonode vs Adult vs Child
+area1 = length(set1up)
+area2 = length(set2up)
+area3 = length(unique(set4up))
+n12 = length(intersect(set1up, set2up))
+n23 = length(intersect(set2up, set4up))
+n13 = length(intersect(set1up, set4up))
+n123 = length(intersect(intersect(set1up, set2up),set4up))
+
+fit = euler(c('A' = area1-((n12+n13)-n123), 
+              'B' = area2-((n12+n23)-n123), 
+              'C' = area3-((n13+n23)-n123), 
+              'A&B' = n12 - n123, 
+              'B&C' = n23 - n123, 
+              'A&C'= n13 - n123, 
+              'A&B&C'= n123),
+#            shape='ellipse',
+            quantities=T)
+png('upregulated_euler_diagram_Adult_Child_MouseLN_MDP.png',width=865,height = 575)
+plot(fit,
+     lty = 2,
+     fills = brewer.pal(3, "Pastel2"),
+     quantities = list(fontsize = 13),
+     labels = c('Child','Adult','Mouse\nLN - Ortholog'),
+     cex =2,
+     main = 'Upregulated Genes')
+dev.off()
+
+#Downregulated genes Mouse Feet vs Adult vs Child
+area1 = length(set1down)
+area2 = length(set2down)
+area3 = length(unique(set3down))
+n12 = length(intersect(set1down, set2down))
+n23 = length(intersect(set2down, set3down))
+n13 = length(intersect(set1down, set3down))
+n123 = length(intersect(intersect(set1down, set2down),set3down))
+
+fit = euler(c('A' = area1-((n12+n13)-n123), 
+              'B' = area2-((n12+n23)-n123), 
+              'C' = area3-((n13+n23)-n123), 
+              'A&B' = n12 - n123, 
+              'B&C' = n23 - n123, 
+              'A&C'= n13 - n123, 
+              'A&B&C'= n123),
+            shape='ellipse',
+            quantities=T)
+png('downregulated_euler_diagram_Adult_Child_Mousefeet_MDP.png',width=865,height = 575)
+plot(fit,
+     lty = 2,
+     fills = brewer.pal(3, "Pastel2"),
+     quantities = list(fontsize = 13),
+     labels = c('Child','Adult','Mouse - Feet\nOrtholog'),
+     cex =2,
+     main = 'Downregulated Genes')
+dev.off()
+
+#Downregulated genes Mouse Linfonode vs Adult vs Child
+area1 = length(set1down)
+area2 = length(set2down)
+area3 = length(unique(set4down))
+n12 = length(intersect(set1down, set2down))
+n23 = length(intersect(set2down, set4down))
+n13 = length(intersect(set1down, set4down))
+n123 = length(intersect(intersect(set1down, set2down),set4down))
+
+fit = euler(c('A' = area1-((n12+n13)-n123), 
+              'B' = area2-((n12+n23)-n123), 
+              'C' = area3-((n13+n23)-n123), 
+              'A&B' = n12 - n123, 
+              'B&C' = n23 - n123, 
+              'A&C'= n13 - n123, 
+              'A&B&C'= n123),
+#            shape='ellipse',
+            quantities=T)
+png('downregulated_euler_diagram_Adult_Child_MouseLN_MDP.png',width=865,height = 575)
+plot(fit,
+     lty = 2,
+     fills = brewer.pal(3, "Pastel2"),
+     quantities = list(fontsize = 13),
+     labels = c('Child','Adult','Mouse\nLN - Ortholog'),
+     cex =2,
+     main = 'Downregulated Genes')
+dev.off()
+
+```
+
+**Test Gene Overlap between datasets using GeneOverlap R package**
+```{r}
+adult = list(AdultUp = set2up, AdultDown = set2down)
+child = list(ChildUp = set1up, ChildDown = set1down)
+
+mouse  = list(MouseFeetUp = unique(set3up), MouseLNUP = unique(set4up), MouseFeetDown = unique(set3down), MouseLNDown = unique(set4down))
+
+adultchild = list(ChildUp = set1up, AdultUp = set2up, ChildDown = set1down, AdultDown = set2down)
+
+
+### Mouse vs Adult+Child
+#number of human genes with a ortholog in mouse
+n = length(unique((orth[orth$Mouse.gene.stable.ID != '',1])))
+gom.obj <- newGOM(adultchild, mouse, n )
+drawHeatmap(gom.obj, adj.p = T, grid.col = 'Blues',note.col = 'black')
+
+
+### Ault vs Child - There is association between Adult and Child de-regulated genes?
+# number of genes in Human annotation file Homo_sapiens.GRCh38.89.gtf
+n = 58233
+gom.obj <- newGOM(adult, child, n )
+drawHeatmap(gom.obj, adj.p = T, grid.col = 'Blues', note.col='black')
+
+### Test datasets Male Female - Child vs Adult
+child = list(ChildUp = pediatricup$Symbol, 
+                  ChildDown = pediatricdown$Symbol,
+                  ChildFemaleUp = pediatricfemaleup$Symbol,
+                  ChildFemaleDown = pediatricfemaledown$Symbol,
+                  ChildMaleUp = pediatricmaleup$Symbol,
+                  ChildMaleDown = pediatricmaledown$Symbol)
+
+adult = list(AdultUp = rownames(adultup),
+                  AdultDown = rownames(adultdown),
+                  AdultFemaleUp = rownames(adultfemaleup),
+                  AdultFemaleDown = rownames(adultfemaledown),
+                  AdultMaleUp = rownames(adultmaleup),
+                  AdultMaleDown = rownames(adultmaledown))
+
+# number of genes in Human annotation file Homo_sapiens.GRCh38.89.gtf
+n = 58233
+
+gom.obj <- newGOM(adult, child, n )
+drawHeatmap(gom.obj, adj.p = T)
+
+### Test datasets Male Female - Mouse vs Human
+adultchild = list(ChildUp = pediatricup$Symbol, 
+                  ChildDown = pediatricdown$Symbol,
+                  ChildFemaleUp = pediatricfemaleup$Symbol,
+                  ChildFemaleDown = pediatricfemaledown$Symbol,
+                  ChildMaleUp = pediatricmaleup$Symbol,
+                  ChildMaleDown = pediatricmaledown$Symbol,
+                  AdultUp = rownames(adultup),
+                  AdultDown = rownames(adultdown),
+                  AdultFemaleUp = rownames(adultfemaleup),
+                  AdultFemaleDown = rownames(adultfemaledown),
+                  AdultMaleUp = rownames(adultmaleup),
+                  AdultMaleDown = rownames(adultmaledown))
+mouse  = list(MouseFeetUp = set3up, MouseLNUP = set4up, MouseFeetDown = set3down, MouseLNDown = set4down)
+
+n = length(unique((orth[orth$Mouse.gene.stable.ID != '',1])))
+gom.obj <- newGOM(adultchild, mouse, n )
+drawHeatmap(gom.obj, adj.p = T)
+
+## Adult and Child - All vs All
+female = list(ChildFemaleUp = pediatricfemaleup$Symbol,
+                  ChildFemaleDown = pediatricfemaledown$Symbol,
+                  AdultFemaleUp = rownames(adultfemaleup),
+                  AdultFemaleDown = rownames(adultfemaledown))
+
+male = list(ChildMaleUp = pediatricmaleup$Symbol,
+              ChildMaleDown = pediatricmaledown$Symbol,
+              AdultMaleUp = rownames(adultmaleup),
+              AdultMaleDown = rownames(adultmaledown))
+
+# number of genes in Human annotation file Homo_sapiens.GRCh38.89.gtf
+n = 58233
+gom.obj <- newGOM(male,female, genome.size = n )
+drawHeatmap(gom.obj, adj.p = T)
+
+```
+
+
+UpsetR plot
+```{r}
+
+
+datadown = list( ChildDown = pediatricdown$Symbol,
+            ChildFemaleDown = pediatricfemaledown$Symbol,
+            ChildMaleDown = pediatricmaledown$Symbol,
+            AdultDown = rownames(adultdown),
+            AdultFemaleDown = rownames(adultfemaledown),
+            AdultMaleDown = rownames(adultmaledown),
+            MouseFeetDown = set3down[set3down != '-'], 
+            MouseLNDown = set4down[set4down != '-'])
+
+dataup = list(ChildUp = pediatricup$Symbol, 
+            ChildFemaleUp = pediatricfemaleup$Symbol,
+            ChildMaleUp = pediatricmaleup$Symbol,
+            AdultUp = rownames(adultup),
+            AdultFemaleUp = rownames(adultfemaleup),
+            AdultMaleUp = rownames(adultmaleup),
+            MouseFeetUp = set3up[set3up != '-'], 
+            MouseLNUP = set4up[set4up != '-'])
+
+y = melt(datadown)
+outdown = as.data.frame.matrix(t(with(y, table(L1,value))))
+upset(outdown, sets = colnames(outdown),nintersects = NA)
+
+v = melt(dataup)
+outup = as.data.frame.matrix(t(with(v, table(L1,value))))
+
+
+downregulated = list(AdultDown = rownames(adultdown),
+                     ChildDown = pediatricdown$Symbol,
+                     MouseFeetDown = set3down[set3down != '-'], 
+                     MouseLNDown = set4down[set4down != '-'])
+
+sourcetargetDown = melt(downregulated)
+colnames(sourcetargetDown) = c('Source','Target')
+write.table(sourcetargetDown,'sourcetarget_Downregulated_genes.tsv',sep='\t',quote =F, row.names=F)
+
+```
+
+Euler Plot - Male vs Female - Adult vs Child
+```{r}
+# Male vs Female - Child upregulated
+area1 = length(pediatricmaleup$Symbol)
+area2 = length(pediatricfemaleup$Symbol)
+n12 = length(intersect(pediatricmaleup$Symbol, pediatricfemaleup$Symbol))
+
+fit = euler(c('A' = area1-n12, 
+              'B' = area2-n12, 
+              'A&B' = n12),
+#            shape='ellipse',
+            quantities=T)
+png('upregulated_euler_diagram_Child_MDP.png',width=865,height = 575)
+plot(fit,
+     lty = 2,
+     fills = brewer.pal(3, "Pastel2"),
+     quantities = list(fontsize = 13),
+     labels = c('Child - Male','Child - Female'),
+     cex =2,
+     main = 'Upregulated Genes')
+dev.off()
+
+# Male vs Female - Child dowregulated
+area1 = length(pediatricmaledown$Symbol)
+area2 = length(pediatricfemaledown$Symbol)
+n12 = length(intersect(pediatricmaledown$Symbol, pediatricfemaledown$Symbol))
+
+fit = euler(c('A' = area1-n12, 
+              'B' = area2-n12, 
+              'A&B' = n12),
+#            shape='ellipse',
+            quantities=T)
+png('downregulated_euler_diagram_Child_MDP.png',width=865,height = 575)
+plot(fit,
+     lty = 2,
+     fills = brewer.pal(3, "Pastel2"),
+     quantities = list(fontsize = 13),
+     labels = c('Child - Male','Child - Female'),
+     cex =2,
+     main = 'Downregulated Genes')
+dev.off()
+
+
+# Male vs Female - Adult upregulated
+area1 = length(adultmaleup$Symbol)
+area2 = length(adultfemaleup$Symbol)
+n12 = length(intersect(adultmaleup$Symbol, adultfemaleup$Symbol))
+
+fit = euler(c('A' = area1-n12, 
+              'B' = area2-n12, 
+              'A&B' = n12),
+#            shape='ellipse',
+            quantities=T)
+png('upregulated_euler_diagram_Adult_MDP.png',width=865,height = 575)
+plot(fit,
+     lty = 2,
+     fills = brewer.pal(3, "Pastel2"),
+     quantities = list(fontsize = 13),
+     labels = c('Adult\nMale','Adult\nFemale'),
+     cex =2,
+     main = 'Upregulated Genes')
+dev.off()
+
+# Male vs Female - Adult dowregulated
+area1 = length(adultmaledown$Symbol)
+area2 = length(adultfemaledown$Symbol)
+n12 = length(intersect(adultmaledown$Symbol, adultfemaledown$Symbol))
+
+fit = euler(c('A' = area1-n12, 
+              'B' = area2-n12, 
+              'A&B' = n12),
+#            shape='ellipse',
+            quantities=T)
+png('downregulated_euler_diagram_Adult_MDP.png',width=865,height = 575)
+plot(fit,
+     lty = 2,
+     fills = brewer.pal(3, "Pastel2"),
+     quantities = list(fontsize = 13),
+     labels = c('Adult\nMale','Adult\nFemale'),
+     cex =2,
+     main = 'Downregulated Genes')
+dev.off()
+
+
+```
+
+
+
+**Preliminar Conclusion**
+
+Two analysis were conducted qith diff expressed genes between the diferent datasets (Child, Adult, Mouse/feet and Mouse Linfonode). First I prepared Venn diagrams to show the overlap between de-regulated genes between datasets, based on that I also performed a calculation of association between the diff express genes with GeneOverlap Package. There is no association between downregulated genes in mouse samples and adult or child samples. It possible to detect a valid association in upregulated genes between mouse and human samples, and this association is stronger betwen mouse and child samples, and also between adult  and child data when considering up and down regulated genes.
+
+**Important consideration**
+Until now I'm just performing analysis with diff expressed genes, identified with analysis based on different control samples. Variations on controls can lead a variations on relative expression results. The next step should be compare the normalized expression values of genes between the datasets. 
+
+

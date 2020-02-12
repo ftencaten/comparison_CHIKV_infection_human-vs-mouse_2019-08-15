@@ -1,0 +1,157 @@
+---
+title: "Diferential expression analisys - Adult Cohort - CHIKV"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+Código utilizado para realizar as análises de genes diferencialmente expressos nos dados do paper - *Systems analysis of subjects acutely infected with the Chikungunya virus* http://dx.plos.org/10.1371/journal.ppat.1007880
+
+**Descrição dos dados**:  
+RNA-seq de 59 pacientes adultos, 39 infectados e 20 saudáveis. Amostras de sangue total foram coletadas no dia 0 de inicio de infecção até o dia 20 de acordo com cada indivídio. Nas análises realizadas abaixo foram utilizados somente 30 indívudos infectados na fase aguda (entre 0 e 3 dias após inicio dos sintomas) e os demais 20 indíviduos saudáveis. 
+
+Infectados:
+18 mulheres / 12 homens
+
+Controle:
+15 mulheres / 5 homens
+
+Os dados estão disponíveis no GEO com código de acesso GSE94892
+
+Indivíduos excluidos devido a fase de infecção > 2 dias após inicio dos sintomas (O arquivo "samplesinfo_selection_tsv" já contem apenas as 50 amostras válidas utilizadas):  
+
+> 
+Subject_ID |  Status  | Days_of_symptoms_Cat
+---------- | -------- | --------------------
+P17        | Infected | D3or4
+P3         | Infected | D3or4
+P43        | Infected | D3or4
+PZIKAG18   | Infected | D3or4
+PZIKAG22   | Infected | D3or4
+PZIKAG09   | Infected | D3or4
+PZIKAG15   | Infected | D3or4
+PZIKAG12   | Infected | D20
+PZIKAG08   | Infected | D20
+
+```{r}
+#Clear R environment
+rm(list = ls())
+
+library(edgeR)
+library(RColorBrewer)
+library(mixOmics)
+library(mdp)
+
+rd <- read.delim('~/Dropbox/Projetos/comparison_CHIKV_infection_human-vs-mouse_2019-08-15/diff_expression_adult_cohort/fccounts.matrix.infected')
+smpl = read.delim('~/Dropbox/Projetos/comparison_CHIKV_infection_human-vs-mouse_2019-08-15/diff_expression_adult_cohort/samplesinfo_selection.tsv')
+
+#Subselecting gene count matrix according selected samples
+rd = rd[,levels(smpl$Sample)]
+rd = rd[,order(colnames(rd))]
+
+smpl = smpl[order(smpl$Sample),]
+
+y <- DGEList(counts=rd,samples = smpl)
+
+group = factor(smpl$Class)
+sex = factor(smpl$Gender)
+design <- model.matrix(~0+group:sex)
+#colnames(design) = levels(smpl$Class)
+
+y <- calcNormFactors(y)
+
+## MDS Plot
+plotMDS(y)
+
+# Filtering
+#keep <- rowSums(cpm(y)>1) >= 2 # keep genes which have minimum cpm of 1 in at least 2 samples
+#y <- y[keep, , keep.lib.sizes=FALSE]
+
+keep <- rowSums(cpm(y) > 0) > dim(cpm(y))[2]/4
+y <- y[keep,]
+```
+
+MDP ANALYSIS
+
+```{r}
+cpmy = as.data.frame(cpm(y))
+
+mdp.results <- mdp(cpmy, smpl, control_lab = "CTRL")
+
+```
+
+
+```{r}
+#Estimate dispersion
+y <- estimateDisp(y,design)
+fit <- glmQLFit(y, design)
+
+#Only female patients
+qlffemale <- glmQLFTest(fit,contrast=c(-1,1,0,0))
+tTagsfemale = topTags(qlffemale,n=NULL)
+tablefemale = tTagsfemale$table
+
+symbols_unique = read.table('symbols_ensembl_id.tsv',head=T)
+tablefemale$Symbol <- rownames(tablefemale)
+tablefemale <- merge(tablefemale, symbols_unique, by = "Symbol", all.x = T)
+
+write.table(tablefemale, 'de-regulated_genes_adult_cohort_female.tsv',sep='\t',quote=F, row.names=F)
+
+#Only male patients
+qlfmale <- glmQLFTest(fit,contrast=c(0,0,-1,1))
+tTagsmale = topTags(qlfmale,n=NULL)
+tablemale = tTagsmale$table
+
+tablemale$Symbol <- rownames(tablemale)
+tablemale <- merge(tablemale, symbols_unique, by = "Symbol", all.x = T)
+
+write.table(tablemale, 'de-regulated_genes_adult_cohort_male.tsv',sep='\t',quote=F, row.names=F)
+
+#All patients
+design <- model.matrix(~0+group)
+
+y <- estimateDisp(y,design)
+fit <- glmQLFit(y, design)
+
+qlf <- glmQLFTest(fit,contrast = c(-1,1))
+
+tTags = topTags(qlf,n=NULL)
+table = tTags$table
+
+table$Symbol <- rownames(table)
+table <- merge(table, symbols_unique, by = "Symbol", all.x = T)
+
+write.table(table, 'de-regulated_genes_adult_cohort.tsv',sep='\t',quote=F, row.names=F)
+
+```
+
+##### Number of upregulated genes - All Patients
+```{r}
+dim(table[table$logFC >= 1 & table$FDR < 0.05,])[1]
+```
+
+##### Number of downregulate genes - All Patients
+```{r}
+dim(table[table$logFC <= -1 & table$FDR < 0.05,])[1]
+```
+
+##### Number of upregulated genes - Female
+```{r}
+dim(tablefemale[tablefemale$logFC >= 1 & tablefemale$FDR < 0.05,])[1]
+```
+
+##### Number of downregulate genes - Female
+```{r}
+dim(tablefemale[tablefemale$logFC <= -1 & tablefemale$FDR < 0.05,])[1]
+```
+
+##### Number of upregulated genes - Male
+```{r}
+dim(tablefemale[tablemale$logFC >= 1 & tablemale$FDR < 0.05,])[1]
+```
+
+##### Number of downregulate genes - Male
+```{r}
+dim(tablefemale[tablemale$logFC <= -1 & tablemale$FDR < 0.05,])[1]
+```

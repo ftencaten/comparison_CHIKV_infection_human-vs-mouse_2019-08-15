@@ -1,0 +1,101 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+  html_notebook: default
+---
+**Heatmap any common DEG**
+
+```{r}
+library(pheatmap)
+data = read.delim('~/DEGs_Infected_vs_Control_Combined.csv')
+
+anydeg = data[data$Number_UP != 0 | data$Number_DOWN != 0,3:7]
+
+anycommondeg = data[data$Number_UP >= 2 | data$Number_DOWN >= 2, 3:7]
+
+rowd = c("correlation","euclidean", "maximum", "manhattan", "canberra", "binary", "minkowski")
+hclust  = c("ward.D", "ward.D2", "single", "complete", "average", "mcquitty" , "median"  , "centroid")
+breaksList = seq(-2, 2, by = 0.01)
+for (i in rowd){
+    for (k in hclust) {
+      pheatmap(as.matrix(anycommondeg[,2:5]), 
+#               col = redgreen(75), 
+               clustering_distance_rows = i,
+               clustering_distance_cols = i,
+               clustering_method = k,
+               main = paste0(i,k),
+               labels_col = c('Adults','Children','Mice - Feet','Mice - LN'), 
+               scale='column',
+               show_rownames = F,
+              color = colorRampPalette(rev(brewer.pal(n = 7, name = "RdYlBu")))(length(breaksList)),
+              breaks = breaksList)
+    }
+}
+
+## Better option  - Distance: minkowski / Hclust: centroid
+
+breaksList = seq(-2, 2, by = 0.01)
+pheatmap(as.matrix(anycommondeg[,2:5]), 
+         #col = redgreen(75), 
+         clustering_distance_rows = "euclidean",
+         clustering_distance_cols = "euclidean",
+         clustering_method = "average",
+         labels_col = c('Adults','Children','Mice - Feet','Mice - LN'), 
+        scale='column',
+         show_rownames = F,
+         color = colorRampPalette(rev(brewer.pal(n = 7, name = "RdYlBu")))(length(breaksList)),
+         breaks = breaksList)
+
+#mat_scaled <- t(scale(t(anycommondeg[,2:5])))
+
+#pheatmap(as.matrix(mat_scaled), 
+#         col = redgreen(75), 
+#         clustering_distance_rows = "minkowski",
+ #        clustering_distance_cols = "minkowski",
+ #        clustering_method = "centroid",
+  #       labels_col = c('Adults','Children','Mice - Feet','Mice - LN'), 
+  #       scale='row',
+  #       show_rownames = F)
+
+
+
+```
+
+
+**Heatmap any DEG**
+
+```{r}
+library(pheatmap)
+data = read.delim('data/tidy/DEGs_Infected_vs_Control_Combined.csv')
+
+anydeg = data[data$Number_UP != 0 | data$Number_DOWN != 0,3:7]
+
+
+rowd = c("correlation","euclidean", "maximum", "manhattan", "canberra", "binary", "minkowski")
+hclust  = c("ward.D", "ward.D2", "single", "complete", "average", "mcquitty" , "median"  , "centroid")
+
+for (i in rowd){
+    for (k in hclust) {
+      pheatmap(as.matrix(anydeg[,2:5]), 
+               col = redgreen(75), 
+               clustering_distance_rows = i,
+               clustering_distance_cols = i,
+               clustering_method = k,
+               main = paste0(i,k),
+               labels_col = c('Adults','Children','Mice - Feet','Mice - LN'), scale='column')
+    }
+}
+
+pheatmap(as.matrix(anydeg[,2:5]), 
+         col = redgreen(75), 
+         clustering_distance_rows = "minkowski",
+         clustering_distance_cols = "minkowski",
+         clustering_method = "centroid",
+         labels_col = c('Adults','Children','Mice - Feet','Mice - LN'), 
+         scale='column',
+         show_rownames = F)
+
+```

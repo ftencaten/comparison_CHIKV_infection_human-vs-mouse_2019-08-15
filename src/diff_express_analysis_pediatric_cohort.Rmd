@@ -1,0 +1,192 @@
+---
+title: "Diff expressed genes Analysis- Pediatric Cohort"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+Código utilizado para realizar as análises de genes diferencialmente expressos nos dados do paper https://www.embopress.org/doi/full/10.15252/msb.20177862 Eva Harris
+
+**Descrição dos dados**:  
+RNA-seq de 43 pacientes pediatricos com idades de 1 a 14 anos. Amostras de sangue total foram coletados na fase aguda da doença (1 ou 2 dias após início dos sintomas) e na fase convalescente (entre 15 e 17 dias após o início dos sintomas). Experimentos foram feitos com replicas técnicas, totalizando 172 amostras.
+
+Os dados de RNA-seq estão diponíveis no GEO com número de acesso GSE99992
+
+Após fazer o pré-processamento dos dados e gerar o arquivo de contagem de reads por gene (gene counts) verifiquei que algumas amostras não estavam agrupadas juntos com os demais no MDA plot. Os pacientes 28,39 e 43 foram excluídos das etapas posteriores de análise. 
+Amostras excluídas:
+SRR5680360
+SRR5680361
+SRR5680362
+SRR5680363
+SRR5680404
+SRR5680405
+SRR5680406 
+SRR5680407
+SRR5680420
+SRR5680421
+SRR5680422
+SRR5680423
+
+**Tutoriais utilizados**:
+http://www.nathalievialaneix.eu/doc/html/solution_edgeR-tomato-withcode.html#starting-from-count-table-1
+http://www.nathalievialaneix.eu/doc/pdf/tutorial-rnaseq.pdf
+https://www.bioconductor.org/packages/release/bioc/vignettes/edgeR/inst/doc/edgeRUsersGuide.pdf
+
+```{r}
+#Load necessary libraries
+library(edgeR)
+library(RColorBrewer)
+library(mixOmics)
+library(mdp)
+
+```
+
+
+```{r}
+#Clear R environment
+rm(list = ls())
+
+setwd('~/Dropbox/Projetos/comparison_CHIKV_infection_human-vs-mouse_2019-08-15/diff_expression_pediatric_cohort')
+
+rd <- read.delim('genecount_matrix_featureCounts.txt') # Read counts file from featureCounts
+smpl = read.delim('sample_description_PRJNA390289_tsv_v3.txt') # File with sample information (groups, lib.size)
+
+#samples to remove according MDP
+smplrm = read.delim('samples_to_remove_based_on_MDP')
+
+rd = rd[,(colnames(rd) %in% as.vector(smplrm$Sample)) == FALSE]
+smpl = smpl[(smpl$run_accession %in% as.vector(smplrm$Sample) == FALSE), ]
+
+#reorder columns from gene count matrix
+rd = rd[,order(colnames(rd))]
+
+# Patient samples to remove according MDS plot
+rem = c(28,39,43)
+remsrr = smpl[smpl$patient %in% rem,1]
+
+rd = rd[,which((colnames(rd) %in% remsrr) == FALSE)]
+smpl = smpl[-which(smpl$patient %in% rem),]
+
+
+#group = factor(paste(smpl$patient,smpl$condition,sep='.'))
+#smpl$group = group
+#design <- model.matrix(~0+group)
+group = factor(smpl$condition)
+sex = factor(smpl$gender)
+smpl$group = group
+smpl$sex = sex
+#design <- model.matrix(~0+group:sex)
+design <- model.matrix(~0+group:sex)
+#colnames(design) = c(levels(smpl$condition), 'male')
+
+y <- DGEList(counts=rd, lib.size = smpl$read_count ,samples = smpl)
+y <- calcNormFactors(y)
+
+# Kepp only genes with Count different from 0 at least in 25% of samples
+keep <- rowSums(cpm(y) > 0) > dim(cpm(y))[2]/4
+y <- y[keep,]
+
+```
+
+MDA PLOT
+```{r}
+plotMDS(y, col = rep(c('red','red','blue','blue'),43))
+```
+
+DIFF express analys Male Female
+```{r}
+#Estimate dispersion
+y <- estimateDisp(y, design)
+
+#model fiting
+fit <- glmQLFit(y, design)
+
+#DE Genes GLM approach 
+qlffemale <- glmQLFTest(fit, contrast = c(1,-1,0,0))
+tTagsfemale = topTags(qlffemale,n=NULL)
+tablefemale = tTagsfemale$table
+
+qlfmale <- glmQLFTest(fit, contrast = c(0,0,1,-1))
+tTagsmale = topTags(qlfmale,n=NULL)
+tablemale = tTagsmale$table
+
+#Add gene name
+symbols_unique = read.table('symbols_ensembl_id.tsv',head=T)
+tablefemale$Symbol <- rownames(tablefemale)
+tablefemale <- merge(tablefemale, symbols_unique, by = "Symbol", all.x = T)
+write.table(tablefemale, 'diff_express_analysis_pediatric_cohort_female_MDP.tsv',sep='\t',quote=F,row.names=F)
+
+tablemale$Symbol <- rownames(tablemale)
+tablemale <- merge(tablemale, symbols_unique, by = "Symbol", all.x = T)
+write.table(tablemale, 'diff_express_analysis_pediatric_cohort_male_MDP.tsv',sep='\t',quote=F, row.names=F)
+
+```
+
+
+Analysis Acute vs Convalescent
+```{r}
+design <- model.matrix(~0+group)
+
+#Estimate dispersion
+y <- estimateDisp(y, design)
+
+#model fiting
+fit <- glmQLFit(y, design)
+
+#DE Genes GLM approach 
+qlf <- glmQLFTest(fit, contrast = c(1,-1))
+tTags = topTags(qlf,n=NULL)
+table = tTags$table
+
+#Add gene name
+table$Symbol <- rownames(table)
+table <- merge(table, symbols_unique, by = "Symbol", all.x = T)
+write.table(table, 'diff_express_analysis_pediatric_cohort_MDP.tsv',sep='\t',quote=F)
+
+
+#Filter DE genes
+table_degs      <- table[table$FDR < 0.05,]
+table_degs_up   <- table_degs[table_degs$logFC >= 1,]
+table_degs_down <- table_degs[table_degs$logFC <= -1,]
+
+table_degs_up <- table_degs_up[order(table_degs_up$logFC, decreasing = T),]
+table_degs_down <- table_degs_down[order(table_degs_down$logFC),]
+
+```
+
+
+Number of upregulated genes - Female:
+```{r}
+dim(tablefemale[tablefemale$logFC >= 1 & tablefemale$FDR <0.05,])[1]
+```
+
+Number of downregulated gene  - Female:
+```{r}
+dim(tablefemale[tablefemale$logFC <= -1 & tablefemale$FDR <0.05,])[1]
+```
+
+Number of upregulated genes - Male:
+```{r}
+dim(tablemale[tablemale$logFC >= 1 & tablemale$FDR <0.05,])[1]
+```
+
+Number of downregulated genes -  Male:
+```{r}
+dim(tablemale[tablemale$logFC <= -1 & tablemale$FDR <0.05,])[1]
+```
+
+
+Number of upregulated genes:
+```{r}
+dim(table_degs_up)[1]
+```
+
+
+
+Number of dowregulated genes:
+```{r}
+dim(table_degs_down)[1]
+```
+
+
+

@@ -1,0 +1,167 @@
+---
+title: "Diferential expression analisys - Mouse - CHIKV"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+Código utilizado para realizar as análises de genes diferencialmente expressos nos dados do paper - *RNA-Seq analysis of chikungunya virus infection and identification of granzyme A as a major promoter of arthritic inflammation* https://dx.plos.org/10.1371/journal.ppat.1006155
+
+**Descrição dos dados**:  
+RNA-seq de 3 réplicas biológicas, cada uma compreendendo amostras de RNA de 4 camundongos fêmeas. Amostras foram coletadas das patas traseiras nos dias 2, 7 e 30 após a infecção e dos linfonodos inguinal nos dias 2 e 7 após a infecção. Camundongos controle foram infectados apenas com adjuvante (RPMI1640 supple- mented with 2% fetal calf serum) e amostras das patas traseiras e dos linfonodos foram coletados após 2 dias.
+
+Os dados estão disponíveis no SRA com código de acesso SRP133993
+
+Após fazer o pré-processamento das amostras, gerar a tabela de contagem de reads por gene e analisar as amostras através de uma MDS plot é possivel perceber que as amostras de linfondo 7 dias após a infecção pouco diferem do controle. Além disso o pico de viremia é verificado 2 dias após a infecção, o que justifica o uso dessas amostras para comparação com os dados de humanos na fase aguda da infecção.
+
+
+```{r}
+#Clear R environment
+rm(list = ls())
+
+library(edgeR)
+library(RColorBrewer)
+library(mixOmics)
+
+rd <- read.delim('~/Dropbox/Projetos/comparison_CHIKV_infection_human-vs-mouse_2019-08-15/diff_expression_mouse/genecount_matrix_featureCounts.txt')
+smpl = read.delim('~/Dropbox/Projetos/comparison_CHIKV_infection_human-vs-mouse_2019-08-15/diff_expression_mouse/samplesinfo.tsv')
+
+#reorder columns by name 
+rd = rd[,order(colnames(rd))]
+
+y <- DGEList(counts=rd,samples = smpl)
+
+group = factor(smpl$Class)
+design <- model.matrix(~0+group)
+colnames(design) = levels(smpl$Class)
+
+y <- calcNormFactors(y)
+
+keep <- rowSums(cpm(y) > 0) > dim(cpm(y))[2]/4
+y <- y[keep,]
+
+```
+
+MDP ANALYSIS
+
+```{r}
+cpmy = as.data.frame(cpm(y))
+
+mdp.results <- mdp(cpmy, smpl, control_lab = "ctrl_f2")
+
+```
+
+
+
+
+
+MDS Plot
+```{r}
+#jpeg('mouse_samples_RNA-seq_CHIKV_infection_MDSplot.jpeg',width=1024 ,height=768)
+plotMDS(y, col=c(rep('red',3), rep('red4',3), rep('forestgreen',3), rep('goldenrod',3), rep('dodgerblue',3), rep('darkblue',3)), labels = smpl$Class, cex=2)
+#dev.off()
+```
+
+```{r}
+# keep genes which have minimum cpm of 1 in at least 2 samples
+#keep <- rowSums(cpm(y)>1) >= 2
+#y <- y[keep, , keep.lib.sizes=FALSE]
+
+y <- estimateDisp(y,design)
+
+fit <- glmQLFit(y, design)
+
+qlf.ctrl_f2.vs.inf_f2 <- glmQLFTest(fit,contrast=c(-1,0,1,0,0,0))
+qlf.ctrl_f2.vs.inf_f7 <- glmQLFTest(fit,contrast=c(-1,0,0,1,0,0))
+qlf.ctrl_ln2.vs.inf_ln2 <- glmQLFTest(fit,contrast=c(0,-1,0,0,1,0))
+qlf.ctrl_ln2.vs.inf_ln7 <- glmQLFTest(fit,contrast=c(0,-1,0,0,0,1))
+
+tTags.ctrl_f2.vs.inf_f2 = topTags(qlf.ctrl_f2.vs.inf_f2,n=NULL)
+tTags.ctrl_f2.vs.inf_f7 = topTags(qlf.ctrl_f2.vs.inf_f7,n=NULL)
+tTags.ctrl_ln2.vs.inf_ln2 = topTags(qlf.ctrl_ln2.vs.inf_ln2,n=NULL)
+tTags.ctrl_ln2.vs.inf_ln7 = topTags(qlf.ctrl_ln2.vs.inf_ln7,n=NULL)
+
+#Read file with orthologs information
+orth = read.delim('hsapiens_genes_orthologs_mouse.txt')
+
+table_tTags.ctrl_f2.vs.inf_f2 = tTags.ctrl_f2.vs.inf_f2$table
+table_tTags.ctrl_f2.vs.inf_f7 = tTags.ctrl_f2.vs.inf_f7$table
+table_tTags.ctrl_ln2.vs.inf_ln2 = tTags.ctrl_ln2.vs.inf_ln2$table
+table_tTags.ctrl_ln2.vs.inf_ln7 = tTags.ctrl_ln2.vs.inf_ln7$table
+
+table_tTags.ctrl_f2.vs.inf_f2$Mouse.gene.name = rownames(table_tTags.ctrl_f2.vs.inf_f2)
+table_tTags.ctrl_f2.vs.inf_f7$Mouse.gene.name = rownames(table_tTags.ctrl_f2.vs.inf_f7)
+table_tTags.ctrl_ln2.vs.inf_ln2$Mouse.gene.name = rownames(table_tTags.ctrl_ln2.vs.inf_ln2)
+table_tTags.ctrl_ln2.vs.inf_ln7$Mouse.gene.name = rownames(table_tTags.ctrl_ln2.vs.inf_ln7)
+
+# Join mouse gene name with Humand gene name by orthologs
+tTags.ctrl_f2.vs.inf_f2_orth = dplyr::left_join(table_tTags.ctrl_f2.vs.inf_f2, orth, by = "Mouse.gene.name")
+tTags.ctrl_f2.vs.inf_f7_orth = dplyr::left_join(table_tTags.ctrl_f2.vs.inf_f7, orth, by = "Mouse.gene.name")
+tTags.ctrl_ln2.vs.inf_ln2_orth = dplyr::left_join(table_tTags.ctrl_ln2.vs.inf_ln2, orth, by = "Mouse.gene.name")
+tTags.ctrl_ln2.vs.inf_ln7_orth = dplyr::left_join(table_tTags.ctrl_ln2.vs.inf_ln7, orth, by = "Mouse.gene.name")
+
+# write dif express files
+write.table(tTags.ctrl_f2.vs.inf_f2$table, 
+            'diff_express_analysis_ctrl_f2.vs.inf_f2', 
+            sep='\t',quote=F)
+write.table(tTags.ctrl_f2.vs.inf_f7$table, 
+            'diff_express_analysis_ctrl_f2.vs.inf_f7', 
+            sep='\t',quote=F)
+write.table(tTags.ctrl_ln2.vs.inf_ln2$table, 
+            'diff_express_analysis_ctrl_ln2.vs.inf_ln2', 
+            sep='\t',quote=F)
+write.table(tTags.ctrl_ln2.vs.inf_ln7$table, 
+            'diff_express_analysiss_ctrl_ln2.vs.inf_ln7', 
+            sep='\t',quote=F)
+
+# write dif express files with orthologs information
+write.table(tTags.ctrl_f2.vs.inf_f2_orth, 
+            'diff_express_analysis_ctrl_f2.vs.inf_f2_with_orth', 
+            sep='\t', quote=F,row.names=F)
+write.table(tTags.ctrl_f2.vs.inf_f7_orth, 
+            'diff_express_analysis_ctrl_f2.vs.inf_f7_with_orth', 
+            sep='\t',quote=F,row.names=F)
+write.table(tTags.ctrl_ln2.vs.inf_ln2_orth, 
+            'diff_express_analysis_ctrl_ln2.vs.inf_ln2_with_orth', 
+            sep='\t',quote=F,row.names=F)
+write.table(tTags.ctrl_ln2.vs.inf_ln7_orth, 
+            'diff_express_analysiss_ctrl_ln2.vs.inf_ln7_with_orth', 
+            sep='\t',quote=F,row.names=F)
+```
+
+Numero de genes diferencialmente expressos Controle Feet dia 2 x Infected Feet dia 2
+```{r}
+#up
+dim(tTags.ctrl_f2.vs.inf_f2$table[tTags.ctrl_f2.vs.inf_f2$table$logFC >= 1 & tTags.ctrl_f2.vs.inf_f2$table$FDR < 0.05,])[1]
+
+#down
+dim(tTags.ctrl_f2.vs.inf_f2$table[tTags.ctrl_f2.vs.inf_f2$table$logFC <= -1 & tTags.ctrl_f2.vs.inf_f2$table$FDR < 0.05,])[1]
+```
+
+Numero de genes diferencialmente expressos Controle Feet dia 2 x Infected Feet dia 7
+```{r}
+#up
+dim(tTags.ctrl_f2.vs.inf_f7$table[tTags.ctrl_f2.vs.inf_f7$table$logFC >= 1 & tTags.ctrl_f2.vs.inf_f7$table$FDR < 0.05,])
+
+#down
+dim(tTags.ctrl_f2.vs.inf_f7$table[tTags.ctrl_f2.vs.inf_f7$table$logFC <= -1 & tTags.ctrl_f2.vs.inf_f7$table$FDR < 0.05,])
+```
+
+Numero de genes diferencialmente expressos Controle Linfonodo dia 2 x Infected Linfonodo dia 2
+```{r}
+#up
+dim(tTags.ctrl_ln2.vs.inf_ln2$table[tTags.ctrl_ln2.vs.inf_ln2$table$logFC >= 1 & tTags.ctrl_ln2.vs.inf_ln2$table$FDR < 0.05,])
+
+#down
+dim(tTags.ctrl_ln2.vs.inf_ln2$table[tTags.ctrl_ln2.vs.inf_ln2$table$logFC <= -1 & tTags.ctrl_ln2.vs.inf_ln2$table$FDR < 0.05,])
+```
+
+Numero de genes diferencialmente expressos Controle Linfonodo dia 2 x Infected Linfonodo dia 7
+```{r}
+#up
+dim(tTags.ctrl_ln2.vs.inf_ln7$table[tTags.ctrl_ln2.vs.inf_ln7$table$logFC >= 1 & tTags.ctrl_ln2.vs.inf_ln7$table$FDR < 0.05,])
+
+#down
+dim(tTags.ctrl_ln2.vs.inf_ln7$table[tTags.ctrl_ln2.vs.inf_ln7$table$logFC <= -1 & tTags.ctrl_ln2.vs.inf_ln7$table$FDR < 0.05,])
+```
+
