@@ -6,8 +6,6 @@ output: html_notebook
 
 
 ```{r}
-rm(list = ls())
-
 #Adults
 gcadults = read.delim('~/Dropbox/Projetos/comparison_CHIKV_infection_human-vs-mouse_2019-08-15/diff_expression_adult_cohort/fccounts.matrix.infected')
 
